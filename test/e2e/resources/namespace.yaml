@@ -1,0 +1,9 @@
+apiVersion: s3tables.services.k8s.aws/v1alpha1
+kind: Namespace
+metadata:
+  name: $NAMESPACE_CR_NAME
+spec:
+  name: $NAMESPACE_NAME
+  tableBucketRef:
+    from:
+      name: $TABLE_BUCKET_CR_NAME

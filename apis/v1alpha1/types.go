@@ -59,6 +59,8 @@ type LastSuccessfulReplicatedUpdate struct {
 type NamespaceSummary struct {
 	CreatedAt      *metav1.Time `json:"createdAt,omitempty"`
 	CreatedBy      *string      `json:"createdBy,omitempty"`
+	Namespace      []*string    `json:"namespace,omitempty"`
+	NamespaceID    *string      `json:"namespaceID,omitempty"`
 	OwnerAccountID *string      `json:"ownerAccountID,omitempty"`
 	TableBucketID  *string      `json:"tableBucketID,omitempty"`
 }
@@ -109,5 +111,7 @@ type TableSummary struct {
 	CreatedAt        *metav1.Time `json:"createdAt,omitempty"`
 	ManagedByService *string      `json:"managedByService,omitempty"`
 	ModifiedAt       *metav1.Time `json:"modifiedAt,omitempty"`
+	Namespace        []*string    `json:"namespace,omitempty"`
+	NamespaceID      *string      `json:"namespaceID,omitempty"`
 	TableBucketID    *string      `json:"tableBucketID,omitempty"`
 }

@@ -80,6 +80,7 @@ rules:
 - apiGroups:
   - s3tables.services.k8s.aws
   resources:
+  - namespaces
   - tablebuckets
   verbs:
   - create
@@ -92,6 +93,7 @@ rules:
 - apiGroups:
   - s3tables.services.k8s.aws
   resources:
+  - namespaces/status
   - tablebuckets/status
   verbs:
   - get

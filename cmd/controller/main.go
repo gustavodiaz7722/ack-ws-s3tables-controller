@@ -40,6 +40,7 @@ import (
 	svctypes "github.com/aws-controllers-k8s/s3tables-controller/apis/v1alpha1"
 	svcresource "github.com/aws-controllers-k8s/s3tables-controller/pkg/resource"
 
+	_ "github.com/aws-controllers-k8s/s3tables-controller/pkg/resource/namespace"
 	_ "github.com/aws-controllers-k8s/s3tables-controller/pkg/resource/table_bucket"
 
 	"github.com/aws-controllers-k8s/s3tables-controller/pkg/version"

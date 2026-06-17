@@ -11,10 +11,23 @@
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+import time
+
 import boto3
 import pytest
 
 from acktest import k8s
+from acktest.k8s import condition
+from acktest.k8s import resource as k8s_resource
+from acktest.resources import random_suffix_name
+
+from e2e import CRD_GROUP, CRD_VERSION, load_s3tables_resource
+from e2e.replacement_values import REPLACEMENT_VALUES
+
+TABLE_BUCKET_PLURAL = "tablebuckets"
+
+CREATE_WAIT_AFTER_SECONDS = 20
+DELETE_WAIT_AFTER_SECONDS = 20
 
 
 def pytest_addoption(parser):
@@ -48,3 +61,38 @@ def k8s_client():
 @pytest.fixture(scope="module")
 def s3tables_client():
     return boto3.client("s3tables")
+
+
+@pytest.fixture
+def table_bucket():
+    """Provisions a TableBucket and yields its details for resources that
+    reference it. Tears the bucket down after the test.
+
+    Yields a dict with:
+      - cr_name: the CR (and bucket) name, usable as TABLE_BUCKET_CR_NAME
+      - ref: the CustomResourceReference
+      - arn: the AWS table bucket ARN
+    """
+    table_bucket_name = random_suffix_name("ack-test-bucket", 32)
+    replacements = REPLACEMENT_VALUES.copy()
+    replacements["TABLE_BUCKET_NAME"] = table_bucket_name
+    resource_data = load_s3tables_resource(
+        "table_bucket", additional_replacements=replacements
+    )
+    ref = k8s_resource.CustomResourceReference(
+        CRD_GROUP, CRD_VERSION, TABLE_BUCKET_PLURAL,
+        table_bucket_name, namespace="default",
+    )
+    k8s_resource.create_custom_resource(ref, resource_data)
+    k8s_resource.wait_resource_consumed_by_controller(ref)
+    time.sleep(CREATE_WAIT_AFTER_SECONDS)
+    assert k8s_resource.wait_on_condition(
+        ref, condition.CONDITION_TYPE_RESOURCE_SYNCED, "True", wait_periods=20,
+    )
+    cr = k8s_resource.get_resource(ref)
+    arn = cr["status"]["ackResourceMetadata"]["arn"]
+
+    yield {"cr_name": table_bucket_name, "ref": ref, "arn": arn}
+
+    k8s_resource.delete_custom_resource(ref)
+    time.sleep(DELETE_WAIT_AFTER_SECONDS)

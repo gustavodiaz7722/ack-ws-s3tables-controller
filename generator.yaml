@@ -1,9 +1,83 @@
 ignore:
   resource_names:
-    - Namespace
     - Table
+  field_paths:
+    # The SDK `namespace` field is a LIST in every shape; we expose a synthetic
+    # scalar Name primary key instead and bridge to/from the list in hooks.
+    # Drop the list field from every input/output so it never appears in the CR.
+    - CreateNamespaceInput.Namespace
+    - CreateNamespaceOutput.Namespace
+    - GetNamespaceOutput.Namespace
 
 resources:
+  Namespace:
+    fields:
+      # Synthetic scalar primary key. NOT derived from an SDK field (the SDK
+      # `namespace` create field is a LIST). Bridged to/from the list and the
+      # scalar Get/Delete input via hooks.
+      Name:
+        type: "*string"
+        is_primary_key: true
+        is_immutable: true
+      TableBucketARN:
+        is_immutable: true
+        references:
+          resource: TableBucket
+          path: Status.ACKResourceMetadata.ARN
+      # AWS-assigned read-only outputs from GetNamespace.
+      CreatedAt:
+        is_read_only: true
+        from:
+          operation: GetNamespace
+          path: CreatedAt
+      CreatedBy:
+        is_read_only: true
+        from:
+          operation: GetNamespace
+          path: CreatedBy
+      NamespaceID:
+        is_read_only: true
+        from:
+          operation: GetNamespace
+          path: NamespaceId
+      TableBucketID:
+        is_read_only: true
+        from:
+          operation: GetNamespace
+          path: TableBucketId
+    # The Get/Delete inputs take the namespace as a SCALAR (NamespaceName).
+    # Rename them to the synthetic scalar primary key Name so ACK populates the
+    # request automatically. (Create input/output are LISTs and are dropped via
+    # ignore.field_paths; the create list is built from Name in a hook.)
+    renames:
+      operations:
+        GetNamespace:
+          input_fields:
+            Namespace: Name
+        DeleteNamespace:
+          input_fields:
+            Namespace: Name
+    exceptions:
+      errors:
+        404:
+          code: NotFoundException
+      terminal_codes:
+        - BadRequestException
+    hooks:
+      sdk_create_post_build_request:
+        template_path: hooks/namespace/sdk_create_post_build_request.go.tpl
+      # The generated output mapping skips NamespaceId/TableBucketId: the
+      # code-generator output loop matches SDK member names (`NamespaceId`,
+      # `TableBucketId`) against the resource field keys, which carry ACK's `ID`
+      # initialism (`NamespaceID`, `TableBucketID`), so the members don't match
+      # and are dropped. (Not caused by the `namespace` list field ignored above
+      # — TableBucket hits the same skip with no ignore rule.) This hook
+      # populates those AWS-assigned read-only status fields.
+      sdk_read_one_post_set_output:
+        template_path: hooks/namespace/sdk_read_one_post_set_output.go.tpl
+    tags:
+      ignore: true
+
   TableBucket:
     fields:
       Name:
