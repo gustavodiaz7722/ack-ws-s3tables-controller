@@ -1,0 +1,24 @@
+apiVersion: s3tables.services.k8s.aws/v1alpha1
+kind: Table
+metadata:
+  name: $TABLE_CR_NAME
+spec:
+  name: $TABLE_NAME
+  tableBucketRef:
+    from:
+      name: $TABLE_BUCKET_CR_NAME
+  namespaceRef:
+    from:
+      name: $NAMESPACE_CR_NAME
+  format: ICEBERG
+  metadata:
+    iceberg:
+      schema:
+        fields:
+          - name: id
+            type: int
+          - name: data
+            type: string
+  tags:
+    environment: test
+    team: ack

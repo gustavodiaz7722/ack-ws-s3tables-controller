@@ -38,21 +38,68 @@ type EncryptionConfiguration struct {
 	SSEAlgorithm *string                                  `json:"sseAlgorithm,omitempty"`
 }
 
+// Contains details about the metadata for an Iceberg table.
+type IcebergMetadata struct {
+	// Defines how data in an Iceberg table is partitioned. Partitioning helps optimize
+	// query performance by organizing data into separate files based on field values.
+	// Each partition field specifies a transform to apply to a source field.
+	PartitionSpec *IcebergPartitionSpec `json:"partitionSpec,omitempty"`
+	Properties    map[string]*string    `json:"properties,omitempty"`
+	// Contains details about the schema for an Iceberg table.
+	Schema *IcebergSchema `json:"schema,omitempty"`
+	// Defines the sort order for data within an Iceberg table. Sorting data can
+	// improve query performance by enabling more efficient data skipping.
+	WriteOrder *IcebergSortOrder `json:"writeOrder,omitempty"`
+}
+
 // Defines a single partition field in an Iceberg partition specification.
 type IcebergPartitionField struct {
+	FieldID   *int64  `json:"fieldID,omitempty"`
 	Name      *string `json:"name,omitempty"`
+	SourceID  *int64  `json:"sourceID,omitempty"`
 	Transform *string `json:"transform,omitempty"`
+}
+
+// Defines how data in an Iceberg table is partitioned. Partitioning helps optimize
+// query performance by organizing data into separate files based on field values.
+// Each partition field specifies a transform to apply to a source field.
+type IcebergPartitionSpec struct {
+	Fields []*IcebergPartitionField `json:"fields,omitempty"`
+	SpecID *int64                   `json:"specID,omitempty"`
+}
+
+// Contains details about the schema for an Iceberg table.
+type IcebergSchema struct {
+	Fields []*SchemaField `json:"fields,omitempty"`
 }
 
 // Defines a single sort field in an Iceberg sort order specification.
 type IcebergSortField struct {
+	Direction *string `json:"direction,omitempty"`
+	NullOrder *string `json:"nullOrder,omitempty"`
+	SourceID  *int64  `json:"sourceID,omitempty"`
 	Transform *string `json:"transform,omitempty"`
+}
+
+// Defines the sort order for data within an Iceberg table. Sorting data can
+// improve query performance by enabling more efficient data skipping.
+type IcebergSortOrder struct {
+	Fields  []*IcebergSortField `json:"fields,omitempty"`
+	OrderID *int64              `json:"orderID,omitempty"`
 }
 
 // Contains information about the most recent successful replication update
 // to a destination.
 type LastSuccessfulReplicatedUpdate struct {
-	Timestamp *metav1.Time `json:"timestamp,omitempty"`
+	MetadataLocation *string      `json:"metadataLocation,omitempty"`
+	Timestamp        *metav1.Time `json:"timestamp,omitempty"`
+}
+
+// Contains information about tables that are managed by S3 Tables, including
+// replication information for replica tables.
+type ManagedTableInformation struct {
+	// Contains information about the source of a replicated table.
+	ReplicationInformation *ReplicationInformation `json:"replicationInformation,omitempty"`
 }
 
 // Contains details about a namespace.
@@ -73,14 +120,21 @@ type ReplicationDestination struct {
 // Contains status information for a replication destination, including the
 // current replication state, last successful update, and any error messages.
 type ReplicationDestinationStatusModel struct {
+	DestinationTableARN       *string `json:"destinationTableARN,omitempty"`
 	DestinationTableBucketARN *string `json:"destinationTableBucketARN,omitempty"`
 	FailureMessage            *string `json:"failureMessage,omitempty"`
 }
 
+// Contains information about the source of a replicated table.
+type ReplicationInformation struct {
+	SourceTableARN *string `json:"sourceTableARN,omitempty"`
+}
+
 // Contains details about a schema field.
 type SchemaField struct {
+	ID   *int64  `json:"id,omitempty"`
 	Name *string `json:"name,omitempty"`
-	Type *string `json:"type_,omitempty"`
+	Type *string `json:"type,omitempty"`
 }
 
 // The configuration details for the storage class of tables or table buckets.
@@ -106,12 +160,21 @@ type TableMaintenanceJobStatusValue struct {
 	LastRunTimestamp *metav1.Time `json:"lastRunTimestamp,omitempty"`
 }
 
+// Contains details about the table metadata.
+type TableMetadata struct {
+	// Contains details about the metadata for an Iceberg table.
+	Iceberg *IcebergMetadata `json:"iceberg,omitempty"`
+}
+
 // Contains details about a table.
 type TableSummary struct {
 	CreatedAt        *metav1.Time `json:"createdAt,omitempty"`
 	ManagedByService *string      `json:"managedByService,omitempty"`
 	ModifiedAt       *metav1.Time `json:"modifiedAt,omitempty"`
+	Name             *string      `json:"name,omitempty"`
 	Namespace        []*string    `json:"namespace,omitempty"`
 	NamespaceID      *string      `json:"namespaceID,omitempty"`
+	TableARN         *string      `json:"tableARN,omitempty"`
 	TableBucketID    *string      `json:"tableBucketID,omitempty"`
+	Type             *string      `json:"type_,omitempty"`
 }

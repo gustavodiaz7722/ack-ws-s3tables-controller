@@ -1,6 +1,5 @@
 ignore:
-  resource_names:
-    - Table
+  resource_names: []
   field_paths:
     # The SDK `namespace` field is a LIST in every shape; we expose a synthetic
     # scalar Name primary key instead and bridge to/from the list in hooks.
@@ -8,8 +7,123 @@ ignore:
     - CreateNamespaceInput.Namespace
     - CreateNamespaceOutput.Namespace
     - GetNamespaceOutput.Namespace
+    # GetTable returns `namespace` as a LIST, but CreateTable takes it as a
+    # scalar (modeled as a reference to the Namespace resource). Drop the list
+    # output and bridge the scalar back in the read hook.
+    - GetTableOutput.Namespace
+    # SchemaField.Required is a non-pointer bool in the SDK, which ACK cannot
+    # round-trip cleanly (generates *bool, breaking the setter assignment).
+    # Drop it; S3 Tables defaults required=false and assigns field IDs itself.
+    - SchemaField.Required
 
 resources:
+  Table:
+    fields:
+      # Primary key, but MUTABLE via RenameTable. To detect a rename, the read
+      # path keys off the stable tableARN (see sdk_read_one_post_build_request)
+      # so GetTable returns the CURRENT AWS name; a spec.name change then shows
+      # up as a delta and customUpdateTable calls RenameTable.
+      Name:
+        is_primary_key: true
+      # Parent table bucket, referenced by ARN (same-service — no service_name).
+      TableBucketARN:
+        is_required: true
+        is_immutable: true
+        references:
+          resource: TableBucket
+          path: Status.ACKResourceMetadata.ARN
+      # Parent namespace, referenced by name (same-service — no service_name).
+      # Scalar in the Create/Get/Delete inputs; the list-typed GetTable output
+      # member is dropped (see ignore.field_paths) and bridged in a read hook.
+      Namespace:
+        is_required: true
+        is_immutable: true
+        references:
+          resource: Namespace
+          path: Spec.Name
+      # Create-only / immutable configuration.
+      Format:
+        is_immutable: true
+      Metadata:
+        is_immutable: true
+      Metadata.Iceberg.Schema.Fields.Type:
+        go_tag: json:"type,omitempty"
+      EncryptionConfiguration:
+        is_immutable: true
+      StorageClassConfiguration:
+        is_immutable: true
+      # AWS-assigned, used as an optimistic-concurrency guard on delete/rename.
+      VersionToken:
+        is_read_only: true
+        from:
+          operation: GetTable
+          path: VersionToken
+      # Read-only status fields from the flat GetTable response. (tableARN is
+      # auto-detected as the primary ARN and surfaced via
+      # Status.ACKResourceMetadata.ARN, so it is not modeled as its own field.)
+      Type:
+        is_read_only: true
+        from:
+          operation: GetTable
+          path: Type
+        go_tag: json:"type,omitempty"
+      NamespaceID:
+        is_read_only: true
+        from:
+          operation: GetTable
+          path: NamespaceId
+      TableBucketID:
+        is_read_only: true
+        from:
+          operation: GetTable
+          path: TableBucketId
+      # metadataLocation is not part of CreateTable; it is read from GetTable
+      # and mutated via the dedicated UpdateTableMetadataLocation API. Modeled
+      # as a spec field (sourced from the GetTable output) so changes produce a
+      # delta that customUpdateTable reconciles via UpdateTableMetadataLocation.
+      MetadataLocation:
+        from:
+          operation: GetTable
+          path: MetadataLocation
+      WarehouseLocation:
+        is_read_only: true
+        from:
+          operation: GetTable
+          path: WarehouseLocation
+      CreatedAt:
+        is_read_only: true
+        from:
+          operation: GetTable
+          path: CreatedAt
+      ModifiedAt:
+        is_read_only: true
+        from:
+          operation: GetTable
+          path: ModifiedAt
+    exceptions:
+      errors:
+        404:
+          code: NotFoundException
+      terminal_codes:
+        - BadRequestException
+    hooks:
+      # metadataLocation is a Put-only field (not part of CreateTable; applied
+      # via UpdateTableMetadataLocation). When desired, requeue after create so
+      # the next reconciliation detects the delta and customUpdateTable syncs it.
+      sdk_create_post_set_output:
+        template_path: hooks/table/sdk_create_post_set_output.go.tpl
+      # GetTable accepts name triplet OR tableArn; clear tableArn so the read
+      # uses the name triplet (ACK populates both).
+      sdk_read_one_post_build_request:
+        template_path: hooks/table/sdk_read_one_post_build_request.go.tpl
+      # GetTable returns namespace as a list; bridge resp.Namespace[0] back into
+      # the scalar Spec.Namespace and fetch tags via ListTagsForResource.
+      sdk_read_one_post_set_output:
+        template_path: hooks/table/sdk_read_one_post_set_output.go.tpl
+    # No generic Update API: name is changed via RenameTable, tags via
+    # TagResource/UntagResource. Everything else is immutable.
+    update_operation:
+      custom_method_name: customUpdateTable
   Namespace:
     fields:
       # Synthetic scalar primary key. NOT derived from an SDK field (the SDK

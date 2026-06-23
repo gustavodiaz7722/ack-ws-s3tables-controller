@@ -25,6 +25,7 @@ from e2e import CRD_GROUP, CRD_VERSION, load_s3tables_resource
 from e2e.replacement_values import REPLACEMENT_VALUES
 
 TABLE_BUCKET_PLURAL = "tablebuckets"
+NAMESPACE_PLURAL = "namespaces"
 
 CREATE_WAIT_AFTER_SECONDS = 20
 DELETE_WAIT_AFTER_SECONDS = 20
@@ -93,6 +94,49 @@ def table_bucket():
     arn = cr["status"]["ackResourceMetadata"]["arn"]
 
     yield {"cr_name": table_bucket_name, "ref": ref, "arn": arn}
+
+    k8s_resource.delete_custom_resource(ref)
+    time.sleep(DELETE_WAIT_AFTER_SECONDS)
+
+
+@pytest.fixture
+def namespace(table_bucket):
+    """Provisions a Namespace inside the `table_bucket` fixture and yields its
+    details for resources that reference it. Tears the namespace down after the
+    test (before the parent bucket).
+
+    Yields a dict with:
+      - name: the S3 Tables namespace name (matches ^[0-9a-z_]*$)
+      - cr_name: the CR name, usable as NAMESPACE_CR_NAME
+      - ref: the CustomResourceReference
+      - table_bucket: the parent `table_bucket` fixture value
+    """
+    namespace_name = random_suffix_name("ack_test_ns", 24).replace("-", "_")
+    cr_name = namespace_name.replace("_", "-")
+    replacements = REPLACEMENT_VALUES.copy()
+    replacements["NAMESPACE_NAME"] = namespace_name
+    replacements["NAMESPACE_CR_NAME"] = cr_name
+    replacements["TABLE_BUCKET_CR_NAME"] = table_bucket["cr_name"]
+    resource_data = load_s3tables_resource(
+        "namespace", additional_replacements=replacements
+    )
+    ref = k8s_resource.CustomResourceReference(
+        CRD_GROUP, CRD_VERSION, NAMESPACE_PLURAL,
+        cr_name, namespace="default",
+    )
+    k8s_resource.create_custom_resource(ref, resource_data)
+    k8s_resource.wait_resource_consumed_by_controller(ref)
+    time.sleep(CREATE_WAIT_AFTER_SECONDS)
+    assert k8s_resource.wait_on_condition(
+        ref, condition.CONDITION_TYPE_RESOURCE_SYNCED, "True", wait_periods=20,
+    )
+
+    yield {
+        "name": namespace_name,
+        "cr_name": cr_name,
+        "ref": ref,
+        "table_bucket": table_bucket,
+    }
 
     k8s_resource.delete_custom_resource(ref)
     time.sleep(DELETE_WAIT_AFTER_SECONDS)

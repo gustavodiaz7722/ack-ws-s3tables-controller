@@ -17,6 +17,7 @@ rules:
   - s3tables.services.k8s.aws
   resources:
   - namespaces
+  - tables
   - tablebuckets
   verbs:
   - create
@@ -30,6 +31,7 @@ rules:
   - s3tables.services.k8s.aws
   resources:
   - namespaces
+  - tables
   - tablebuckets
   verbs:
   - get

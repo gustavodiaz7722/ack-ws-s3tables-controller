@@ -82,6 +82,7 @@ rules:
   resources:
   - namespaces
   - tablebuckets
+  - tables
   verbs:
   - create
   - delete
@@ -95,6 +96,7 @@ rules:
   resources:
   - namespaces/status
   - tablebuckets/status
+  - tables/status
   verbs:
   - get
   - patch
