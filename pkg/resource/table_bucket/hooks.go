@@ -15,6 +15,7 @@ package table_bucket
 
 import (
 	"context"
+	"errors"
 
 	ackcompare "github.com/aws-controllers-k8s/runtime/pkg/compare"
 	ackrtlog "github.com/aws-controllers-k8s/runtime/pkg/runtime/log"
@@ -105,6 +106,23 @@ func (rm *resourceManager) setBucketConfigurations(
 		ko.Spec.Tags = nil
 	}
 
+	// GetTableBucketPolicy returns NotFoundException when no policy is set;
+	// treat that as an absent (nil) policy rather than an error.
+	polResp, err := rm.sdkapi.GetTableBucketPolicy(
+		ctx,
+		&svcsdk.GetTableBucketPolicyInput{TableBucketARN: arn},
+	)
+	rm.metrics.RecordAPICall("READ_ONE", "GetTableBucketPolicy", err)
+	if err != nil {
+		var notFound *svcsdktypes.NotFoundException
+		if !errors.As(err, &notFound) {
+			return err
+		}
+		ko.Spec.Policy = nil
+	} else {
+		ko.Spec.Policy = polResp.ResourcePolicy
+	}
+
 	return nil
 }
 
@@ -150,8 +168,45 @@ func (rm *resourceManager) customUpdateTableBucket(
 			return nil, err
 		}
 	}
+	if delta.DifferentAt("Spec.Policy") {
+		if err := rm.syncPolicy(ctx, desired, arn); err != nil {
+			return nil, err
+		}
+	}
 
 	return &resource{ko}, nil
+}
+
+// syncPolicy applies the desired bucket resource policy. An empty/absent policy
+// removes it via DeleteTableBucketPolicy; otherwise it is set via
+// PutTableBucketPolicy.
+func (rm *resourceManager) syncPolicy(
+	ctx context.Context,
+	desired *resource,
+	arn *string,
+) (err error) {
+	rlog := ackrtlog.FromContext(ctx)
+	exit := rlog.Trace("rm.syncPolicy")
+	defer func() { exit(err) }()
+
+	if desired.ko.Spec.Policy == nil || *desired.ko.Spec.Policy == "" {
+		_, err = rm.sdkapi.DeleteTableBucketPolicy(
+			ctx,
+			&svcsdk.DeleteTableBucketPolicyInput{TableBucketARN: arn},
+		)
+		rm.metrics.RecordAPICall("DELETE", "DeleteTableBucketPolicy", err)
+		return err
+	}
+
+	_, err = rm.sdkapi.PutTableBucketPolicy(
+		ctx,
+		&svcsdk.PutTableBucketPolicyInput{
+			TableBucketARN: arn,
+			ResourcePolicy: desired.ko.Spec.Policy,
+		},
+	)
+	rm.metrics.RecordAPICall("UPDATE", "PutTableBucketPolicy", err)
+	return err
 }
 
 // syncTags reconciles the desired tag set against the latest observed tag set

@@ -226,6 +226,16 @@ resources:
       StorageClassConfiguration:
         late_initialize:
           skip_incomplete_check: {}
+      # Bucket resource policy (JSON). Not in CreateTableBucket/GetTableBucket —
+      # managed via the dedicated Put/Get/DeleteTableBucketPolicy APIs, read in a
+      # hook and synced in update. No late_initialize: update runs before late-init
+      # and treats a nil Policy as "delete", so back-filling spec from a live policy
+      # would let an unset spec delete it. Mirrors the S3 controller's Bucket.Policy.
+      Policy:
+        is_iam_policy: true
+        from:
+          operation: GetTableBucketPolicy
+          path: ResourcePolicy
     exceptions:
       errors:
         404:

@@ -74,6 +74,9 @@ spec:
                 x-kubernetes-validations:
                 - message: Value is immutable once set
                   rule: self == oldSelf
+              policy:
+                description: The JSON that defines the policy.
+                type: string
               storageClassConfiguration:
                 description: |-
                   The default storage class configuration for the table bucket. This configuration

@@ -34,6 +34,8 @@ type TableBucketSpec struct {
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="Value is immutable once set"
 	// +kubebuilder:validation:Required
 	Name *string `json:"name"`
+	// The JSON that defines the policy.
+	Policy *string `json:"policy,omitempty"`
 	// The default storage class configuration for the table bucket. This configuration
 	// will be applied to all new tables created in this bucket unless overridden
 	// at the table level. If not specified, the service default storage class will

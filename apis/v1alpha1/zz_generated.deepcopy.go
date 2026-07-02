@@ -715,6 +715,11 @@ func (in *TableBucketSpec) DeepCopyInto(out *TableBucketSpec) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.Policy != nil {
+		in, out := &in.Policy, &out.Policy
+		*out = new(string)
+		**out = **in
+	}
 	if in.StorageClassConfiguration != nil {
 		in, out := &in.StorageClassConfiguration, &out.StorageClassConfiguration
 		*out = new(StorageClassConfiguration)

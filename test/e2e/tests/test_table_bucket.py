@@ -280,3 +280,66 @@ class TestTableBucket:
             if adopt_ref is not None and k8s.get_resource_exists(adopt_ref):
                 k8s.delete_custom_resource(adopt_ref)
                 time.sleep(DELETE_WAIT_AFTER_SECONDS)
+
+    def test_policy(self, s3tables_client):
+        # Bucket resource policy is a separate API
+        # (Put/Get/DeleteTableBucketPolicy), wired via the read hook (late-init)
+        # and customUpdateTableBucket.
+        table_bucket_name = random_suffix_name("ack-test-policy", 32)
+
+        replacements = REPLACEMENT_VALUES.copy()
+        replacements["TABLE_BUCKET_NAME"] = table_bucket_name
+        resource_data = load_s3tables_resource(
+            "table_bucket", additional_replacements=replacements
+        )
+
+        ref = k8s.CustomResourceReference(
+            CRD_GROUP, CRD_VERSION, RESOURCE_PLURAL, table_bucket_name,
+            namespace="default",
+        )
+        k8s.create_custom_resource(ref, resource_data)
+        k8s.wait_resource_consumed_by_controller(ref)
+        time.sleep(CREATE_WAIT_AFTER_SECONDS)
+        assert k8s.wait_on_condition(
+            ref, condition.CONDITION_TYPE_RESOURCE_SYNCED, "True", wait_periods=10,
+        )
+        arn = k8s.get_resource(ref)["status"]["ackResourceMetadata"]["arn"]
+        account_id = arn.split(":")[4]
+
+        # Set a resource policy via PutTableBucketPolicy.
+        policy = {
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Effect": "Allow",
+                "Principal": {"AWS": f"arn:aws:iam::{account_id}:root"},
+                "Action": "s3tables:GetTableBucket",
+                "Resource": arn,
+            }],
+        }
+        k8s.patch_custom_resource(ref, {"spec": {"policy": json.dumps(policy)}})
+        time.sleep(MODIFY_WAIT_AFTER_SECONDS)
+        assert k8s.wait_on_condition(
+            ref, condition.CONDITION_TYPE_RESOURCE_SYNCED, "True", wait_periods=10,
+        )
+
+        live = json.loads(
+            s3tables_client.get_table_bucket_policy(tableBucketARN=arn)["resourcePolicy"]
+        )
+        assert live["Statement"][0]["Action"] == "s3tables:GetTableBucket"
+
+        # Clear the policy; it should be removed via DeleteTableBucketPolicy.
+        k8s.patch_custom_resource(ref, {"spec": {"policy": None}})
+        time.sleep(MODIFY_WAIT_AFTER_SECONDS)
+        assert k8s.wait_on_condition(
+            ref, condition.CONDITION_TYPE_RESOURCE_SYNCED, "True", wait_periods=10,
+        )
+        try:
+            s3tables_client.get_table_bucket_policy(tableBucketARN=arn)
+            assert False, "expected NotFoundException after policy removal"
+        except s3tables_client.exceptions.NotFoundException:
+            pass
+
+        _, deleted = k8s.delete_custom_resource(ref)
+        assert deleted
+        time.sleep(DELETE_WAIT_AFTER_SECONDS)
+        assert get_table_bucket(s3tables_client, arn) is None
