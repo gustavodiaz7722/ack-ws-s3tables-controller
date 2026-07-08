@@ -343,3 +343,96 @@ class TestTableBucket:
         assert deleted
         time.sleep(DELETE_WAIT_AFTER_SECONDS)
         assert get_table_bucket(s3tables_client, arn) is None
+
+    def test_maintenance_configuration(self, s3tables_client):
+        # Bucket-level maintenance config is a separate API
+        # (Put/GetTableBucketMaintenanceConfiguration), wired via the read hook
+        # and customUpdateTableBucket.
+        table_bucket_name = random_suffix_name("ack-test-maint", 32)
+
+        replacements = REPLACEMENT_VALUES.copy()
+        replacements["TABLE_BUCKET_NAME"] = table_bucket_name
+        resource_data = load_s3tables_resource(
+            "table_bucket", additional_replacements=replacements
+        )
+
+        ref = k8s.CustomResourceReference(
+            CRD_GROUP, CRD_VERSION, RESOURCE_PLURAL, table_bucket_name,
+            namespace="default",
+        )
+        k8s.create_custom_resource(ref, resource_data)
+        k8s.wait_resource_consumed_by_controller(ref)
+        time.sleep(CREATE_WAIT_AFTER_SECONDS)
+        assert k8s.wait_on_condition(
+            ref, condition.CONDITION_TYPE_RESOURCE_SYNCED, "True", wait_periods=10,
+        )
+        arn = k8s.get_resource(ref)["status"]["ackResourceMetadata"]["arn"]
+
+        # Change the unreferenced-file-removal settings via the dedicated API.
+        updates = {
+            "spec": {
+                "maintenanceConfiguration": {
+                    "icebergUnreferencedFileRemoval": {
+                        "status": "enabled",
+                        "settings": {
+                            "icebergUnreferencedFileRemoval": {
+                                "unreferencedDays": 7,
+                                "nonCurrentDays": 5,
+                            },
+                        },
+                    },
+                },
+            },
+        }
+        k8s.patch_custom_resource(ref, updates)
+        time.sleep(MODIFY_WAIT_AFTER_SECONDS)
+        assert k8s.wait_on_condition(
+            ref, condition.CONDITION_TYPE_RESOURCE_SYNCED, "True", wait_periods=10,
+        )
+
+        cfg = s3tables_client.get_table_bucket_maintenance_configuration(
+            tableBucketARN=arn
+        )["configuration"]
+        settings = cfg["icebergUnreferencedFileRemoval"]["settings"][
+            "icebergUnreferencedFileRemoval"
+        ]
+        assert settings["unreferencedDays"] == 7
+        assert settings["nonCurrentDays"] == 5
+
+        # Clearing the field leaves the config alone (the field is
+        # late-initialized): the service default is preserved rather than
+        # disabled, so maintenance stays enabled. To turn it off, status must be
+        # set to disabled explicitly.
+        k8s.patch_custom_resource(ref, {"spec": {"maintenanceConfiguration": None}})
+        time.sleep(MODIFY_WAIT_AFTER_SECONDS)
+        assert k8s.wait_on_condition(
+            ref, condition.CONDITION_TYPE_RESOURCE_SYNCED, "True", wait_periods=10,
+        )
+        cfg = s3tables_client.get_table_bucket_maintenance_configuration(
+            tableBucketARN=arn
+        )["configuration"]
+        assert cfg["icebergUnreferencedFileRemoval"]["status"] == "enabled"
+
+        # Disable maintenance explicitly via status=disabled (there is no delete
+        # API; the config always exists).
+        disable = {
+            "spec": {
+                "maintenanceConfiguration": {
+                    "icebergUnreferencedFileRemoval": {"status": "disabled"},
+                },
+            },
+        }
+        k8s.patch_custom_resource(ref, disable)
+        time.sleep(MODIFY_WAIT_AFTER_SECONDS)
+        assert k8s.wait_on_condition(
+            ref, condition.CONDITION_TYPE_RESOURCE_SYNCED, "True", wait_periods=10,
+        )
+        cfg = s3tables_client.get_table_bucket_maintenance_configuration(
+            tableBucketARN=arn
+        )["configuration"]
+        assert cfg["icebergUnreferencedFileRemoval"]["status"] == "disabled"
+
+        _, deleted = k8s.delete_custom_resource(ref)
+        assert deleted
+        time.sleep(DELETE_WAIT_AFTER_SECONDS)
+        assert get_table_bucket(s3tables_client, arn) is None

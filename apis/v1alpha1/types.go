@@ -38,6 +38,11 @@ type EncryptionConfiguration struct {
 	SSEAlgorithm *string                                  `json:"sseAlgorithm,omitempty"`
 }
 
+// Contains details about the compaction settings for an Iceberg table.
+type IcebergCompactionSettings struct {
+	TargetFileSizeMB *int64 `json:"targetFileSizeMB,omitempty"`
+}
+
 // Contains details about the metadata for an Iceberg table.
 type IcebergMetadata struct {
 	// Defines how data in an Iceberg table is partitioned. Partitioning helps optimize
@@ -73,6 +78,15 @@ type IcebergSchema struct {
 	Fields []*SchemaField `json:"fields,omitempty"`
 }
 
+// Contains details about the snapshot management settings for an Iceberg table.
+// The oldest snapshot expires when its age exceeds the maxSnapshotAgeHours
+// and the total number of snapshots exceeds the value for the minimum number
+// of snapshots to keep minSnapshotsToKeep.
+type IcebergSnapshotManagementSettings struct {
+	MaxSnapshotAgeHours *int64 `json:"maxSnapshotAgeHours,omitempty"`
+	MinSnapshotsToKeep  *int64 `json:"minSnapshotsToKeep,omitempty"`
+}
+
 // Defines a single sort field in an Iceberg sort order specification.
 type IcebergSortField struct {
 	Direction *string `json:"direction,omitempty"`
@@ -86,6 +100,13 @@ type IcebergSortField struct {
 type IcebergSortOrder struct {
 	Fields  []*IcebergSortField `json:"fields,omitempty"`
 	OrderID *int64              `json:"orderID,omitempty"`
+}
+
+// Contains details about the unreferenced file removal settings for an Iceberg
+// table bucket.
+type IcebergUnreferencedFileRemovalSettings struct {
+	NonCurrentDays   *int64 `json:"nonCurrentDays,omitempty"`
+	UnreferencedDays *int64 `json:"unreferencedDays,omitempty"`
 }
 
 // Contains information about the most recent successful replication update
@@ -145,6 +166,21 @@ type StorageClassConfiguration struct {
 	StorageClass *string `json:"storageClass,omitempty"`
 }
 
+// Details about the values that define the maintenance configuration for a
+// table bucket.
+type TableBucketMaintenanceConfigurationValue struct {
+	// Contains details about the maintenance settings for the table bucket.
+	Settings *TableBucketMaintenanceSettings `json:"settings,omitempty"`
+	Status   *string                         `json:"status,omitempty"`
+}
+
+// Contains details about the maintenance settings for the table bucket.
+type TableBucketMaintenanceSettings struct {
+	// Contains details about the unreferenced file removal settings for an Iceberg
+	// table bucket.
+	IcebergUnreferencedFileRemoval *IcebergUnreferencedFileRemovalSettings `json:"icebergUnreferencedFileRemoval,omitempty"`
+}
+
 // Contains details about a table bucket.
 type TableBucketSummary struct {
 	ARN            *string      `json:"arn,omitempty"`
@@ -153,6 +189,11 @@ type TableBucketSummary struct {
 	OwnerAccountID *string      `json:"ownerAccountID,omitempty"`
 	TableBucketID  *string      `json:"tableBucketID,omitempty"`
 	Type           *string      `json:"type_,omitempty"`
+}
+
+// The values that define a maintenance configuration for a table.
+type TableMaintenanceConfigurationValue struct {
+	Status *string `json:"status,omitempty"`
 }
 
 // Details about the status of a maintenance job.
@@ -165,6 +206,12 @@ type TableMaintenanceJobStatusValue struct {
 type TableMetadata struct {
 	// Contains details about the metadata for an Iceberg table.
 	Iceberg *IcebergMetadata `json:"iceberg,omitempty"`
+}
+
+// The record expiration setting that specifies when records expire and are
+// automatically removed from a table.
+type TableRecordExpirationSettings struct {
+	Days *int64 `json:"days,omitempty"`
 }
 
 // Contains details about a table.

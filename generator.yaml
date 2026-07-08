@@ -236,6 +236,30 @@ resources:
         from:
           operation: GetTableBucketPolicy
           path: ResourcePolicy
+      # Bucket-level Iceberg maintenance config. Not part of CreateTableBucket
+      # or GetTableBucket — managed via the dedicated
+      # Put/GetTableBucketMaintenanceConfiguration APIs. Sourced here so the
+      # field is generated; populated in the read hook and synced in update.
+      #
+      # late_initialize: an unset field is left alone. The read hook populates
+      # the observed config and late-init copies it into spec, so the AWS
+      # default (currently icebergUnreferencedFileRemoval=enabled) is preserved
+      # rather than being disabled. We deliberately do NOT hard-code a default,
+      # so if the service default changes ACK reflects the actual observed
+      # value. To turn maintenance off, set status: disabled explicitly.
+      #
+      # compare.is_ignored: the generated delta does a whole-map DeepEqual,
+      # which never matches a partial spec against the AWS-defaulted observed
+      # config and would re-Put every reconcile. customUpdateTableBucket does a
+      # field-aware comparison instead (only sub-fields the user declared).
+      MaintenanceConfiguration:
+        compare:
+          is_ignored: true
+        from:
+          operation: GetTableBucketMaintenanceConfiguration
+          path: Configuration
+        late_initialize:
+          skip_incomplete_check: {}
     exceptions:
       errors:
         404:
@@ -243,7 +267,19 @@ resources:
       terminal_codes:
         - BadRequestException
     hooks:
+      # Policy and MaintenanceConfiguration are applied via dedicated Put APIs
+      # in the update path, not by CreateTableBucket. Nudge Synced=False after
+      # create when either is set so the update reconcile runs immediately
+      # instead of waiting for the next periodic resync.
+      sdk_create_post_set_output:
+        template_path: hooks/table_bucket/sdk_create_post_set_output.go.tpl
       sdk_read_one_post_set_output:
         template_path: hooks/table_bucket/sdk_read_one_post_set_output.go.tpl
+      # MaintenanceConfiguration is compare.is_ignored (the generated whole-map
+      # DeepEqual churns a partial spec against the AWS-defaulted config). Add a
+      # field-aware comparison so Spec.MaintenanceConfiguration deltas are still
+      # detected and drive an update.
+      delta_post_compare:
+        code: customDeltaPostCompare(delta, a, b)
     update_operation:
       custom_method_name: customUpdateTableBucket

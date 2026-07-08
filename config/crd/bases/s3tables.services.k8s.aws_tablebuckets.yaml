@@ -65,6 +65,35 @@ spec:
                   sseAlgorithm:
                     type: string
                 type: object
+              maintenanceConfiguration:
+                additionalProperties:
+                  description: |-
+                    Details about the values that define the maintenance configuration for a
+                    table bucket.
+                  properties:
+                    settings:
+                      description: Contains details about the maintenance settings
+                        for the table bucket.
+                      properties:
+                        icebergUnreferencedFileRemoval:
+                          description: |-
+                            Contains details about the unreferenced file removal settings for an Iceberg
+                            table bucket.
+                          properties:
+                            nonCurrentDays:
+                              format: int64
+                              type: integer
+                            unreferencedDays:
+                              format: int64
+                              type: integer
+                          type: object
+                      type: object
+                    status:
+                      type: string
+                  type: object
+                description: Details about the maintenance configuration for the table
+                  bucket.
+                type: object
               name:
                 description: |-
                   The name for the table bucket.

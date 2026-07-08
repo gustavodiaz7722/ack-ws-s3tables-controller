@@ -28,6 +28,8 @@ type TableBucketSpec struct {
 	// created in this bucket unless overridden at the table level. The configuration
 	// includes the encryption algorithm and, if using SSE-KMS, the KMS key to use.
 	EncryptionConfiguration *EncryptionConfiguration `json:"encryptionConfiguration,omitempty"`
+	// Details about the maintenance configuration for the table bucket.
+	MaintenanceConfiguration map[string]*TableBucketMaintenanceConfigurationValue `json:"maintenanceConfiguration,omitempty"`
 	// The name for the table bucket.
 	//
 	// Regex Pattern: `^[0-9a-z-]*$`
